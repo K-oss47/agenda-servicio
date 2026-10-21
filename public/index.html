@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda de contactos</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #111;
+    background: linear-gradient(115deg, #f6efe9 0%, #f4d9cf 100%);
+  }
+  .wrap { position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: flex-end; padding: 40px 6vw; }
+
+  /* Panel negro con borde diagonal */
+  .izq {
+    position: absolute; top: 0; bottom: 0; left: 0; width: 60%;
+    background: #0a0a0a; color: #fff;
+    clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    padding: 56px 14% 40px 6vw;
+    display: flex; flex-direction: column;
+  }
+  .etiqueta { font-size: 11px; letter-spacing: .25em; text-transform: uppercase; color: #9a9a9a; margin: 0 0 22px; }
+  h1 {
+    margin: 0 0 18px;
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900; font-size: clamp(2.6rem, 6vw, 5rem);
+    line-height: .95; letter-spacing: -.045em;
+  }
+  .sub { margin: 0 0 24px; font-size: .9rem; color: #cfcfcf; max-width: 34ch; }
+  .lista { overflow-y: auto; flex: 1; min-height: 0; padding-right: 8px; max-height: calc(100vh - 360px); }
+  .lista::-webkit-scrollbar { width: 6px; }
+  .lista::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  .contacto { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #262626; }
+  .inicial {
+    flex: none; width: 36px; height: 36px; border-radius: 50%;
+    background: #fff; color: #0a0a0a; font-weight: 700; font-size: .9rem;
+    display: grid; place-items: center;
+  }
+  .contacto b { display: block; font-weight: 600; font-size: .95rem; }
+  .contacto span { font-size: .82rem; color: #a8a8a8; }
+  .vacio { color: #a8a8a8; font-size: .9rem; padding: 12px 0; }
+
+  /* Tarjeta de vidrio */
+  .tarjeta {
+    position: relative; z-index: 2;
+    width: min(440px, 100%);
+    padding: 40px 38px 34px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, .38);
+    border: 1px solid rgba(255, 255, 255, .65);
+    backdrop-filter: blur(26px) saturate(1.2);
+    -webkit-backdrop-filter: blur(26px) saturate(1.2);
+    box-shadow: 0 24px 60px rgba(60, 30, 20, .18);
+  }
+  .tarjeta .etiqueta { color: #777; margin-bottom: 10px; }
+  h2 {
+    margin: 0 0 26px;
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 900; font-size: 2rem; letter-spacing: -.04em;
+  }
+  label { display: block; margin-top: 18px; font-size: 11px; color: #6b6b6b; }
+  input {
+    width: 100%; padding: 8px 0 9px;
+    background: transparent; border: 0; border-bottom: 1px solid rgba(0, 0, 0, .28);
+    font: inherit; font-size: .95rem; color: #111; border-radius: 0;
+  }
+  input:focus { outline: 0; border-bottom-color: #000; }
+  .pie { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 34px; }
+  #mensaje { margin: 0; font-size: .8rem; color: #555; min-height: 1.2em; }
+  #mensaje.error { color: #b42318; }
+  #mensaje.ok { color: #0f6b3a; }
+  button {
+    flex: none; padding: 13px 26px; border: 0; border-radius: 999px;
+    background: #0a0a0a; color: #fff; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer;
+  }
+  button:disabled { opacity: .55; cursor: wait; }
+  button:focus-visible { outline: 3px solid #f08a6c; outline-offset: 2px; }
+
+  @media (max-width: 860px) {
+    .wrap { flex-direction: column; align-items: stretch; padding: 0 0 32px; }
+    .izq { position: static; width: 100%; clip-path: none; padding: 40px 24px 32px; }
+    .lista { max-height: 320px; }
+    .tarjeta { margin: -12px 16px 0; width: auto; padding: 30px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="izq">
+    <p class="etiqueta">Agenda</p>
+    <h1>Sus<br>contactos.</h1>
+    <p class="sub" id="total">Cargando…</p>
+    <div class="lista" id="lista"></div>
+  </aside>
+
+  <section class="tarjeta" aria-labelledby="t-nuevo">
+    <p class="etiqueta">Nuevo registro</p>
+    <h2 id="t-nuevo">Agregue un contacto.</h2>
+    <label for="nombre">Nombre</label>
+    <input id="nombre" type="text" autocomplete="given-name">
+    <label for="apellido">Apellido</label>
+    <input id="apellido" type="text" autocomplete="family-name">
+    <label for="telefono">Teléfono</label>
+    <input id="telefono" type="tel" autocomplete="tel">
+    <div class="pie">
+      <p id="mensaje" role="status"></p>
+      <button id="guardar" type="button">Guardar contacto</button>
+    </div>
+  </section>
+</div>
+
+<script>
+  const URL_API = "/contactos";
+  const lista = document.getElementById("lista");
+  const total = document.getElementById("total");
+  const mensaje = document.getElementById("mensaje");
+  const boton = document.getElementById("guardar");
+  const campos = {
+    nombre: document.getElementById("nombre"),
+    apellido: document.getElementById("apellido"),
+    telefono: document.getElementById("telefono")
+  };
+
+  function avisar(texto, tipo) {
+    mensaje.textContent = texto;
+    mensaje.className = tipo || "";
+  }
+
+  function textoVacio(texto) {
+    const p = document.createElement("p");
+    p.className = "vacio";
+    p.textContent = texto;
+    return p;
+  }
+
+  function tarjetaContacto(c) {
+    const fila = document.createElement("div");
+    fila.className = "contacto";
+    const ini = document.createElement("div");
+    ini.className = "inicial";
+    ini.textContent = ((c.nombre || "?").trim()[0] || "?").toUpperCase();
+    const datos = document.createElement("div");
+    const nombre = document.createElement("b");
+    nombre.textContent = (c.nombre || "") + " " + (c.apellido || "");
+    const tel = document.createElement("span");
+    tel.textContent = c.telefono || "";
+    datos.append(nombre, tel);
+    fila.append(ini, datos);
+    return fila;
+  }
+
+  async function cargarContactos() {
+    try {
+      const respuesta = await fetch(URL_API);
+      if (!respuesta.ok) throw new Error("HTTP " + respuesta.status);
+      const contactos = await respuesta.json();
+      lista.replaceChildren();
+      if (!Array.isArray(contactos) || contactos.length === 0) {
+        total.textContent = "Aún no hay contactos.";
+        lista.appendChild(textoVacio("Agregue el primero desde el formulario."));
+        return;
+      }
+      total.textContent = contactos.length + (contactos.length === 1 ? " contacto guardado." : " contactos guardados.");
+      contactos.forEach(function (c) { lista.appendChild(tarjetaContacto(c)); });
+    } catch (e) {
+      total.textContent = "No se pudo cargar la agenda.";
+      lista.replaceChildren(textoVacio("Revise su conexión e intente de nuevo."));
+    }
+  }
+
+  async function guardarContacto() {
+    const contacto = {
+      nombre: campos.nombre.value.trim(),
+      apellido: campos.apellido.value.trim(),
+      telefono: campos.telefono.value.trim()
+    };
+    if (!contacto.nombre || !contacto.apellido || !contacto.telefono) {
+      avisar("Complete los tres campos.", "error");
+      return;
+    }
+    boton.disabled = true;
+    avisar("Guardando…");
+    try {
+      const respuesta = await fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contacto)
+      });
+      if (!respuesta.ok) throw new Error("HTTP " + respuesta.status);
+      Object.values(campos).forEach(function (i) { i.value = ""; });
+      avisar("Contacto guardado.", "ok");
+      campos.nombre.focus();
+      await cargarContactos();
+    } catch (e) {
+      avisar("No se pudo guardar.", "error");
+    } finally {
+      boton.disabled = false;
+    }
+  }
+
+  boton.addEventListener("click", guardarContacto);
+  Object.values(campos).forEach(function (i) {
+    i.addEventListener("keydown", function (ev) { if (ev.key === "Enter") guardarContacto(); });
+  });
+
+  cargarContactos();
+</script>
+</body>
+</html>
